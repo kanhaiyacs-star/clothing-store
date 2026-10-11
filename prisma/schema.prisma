@@ -1,0 +1,385 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String         @id @default(cuid())
+  name         String
+  email        String         @unique
+  passwordHash String
+  role         String         @default("CUSTOMER") // "CUSTOMER" | "ADMIN"
+  phone        String?
+  addresses    Address[]
+  designs      CustomDesign[]
+  cart         Cart?
+  wishlist     WishlistItem[]
+  orders       Order[]
+  auditLogs    AuditLog[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([email])
+  @@index([role])
+}
+
+model Address {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName     String
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String
+  postalCode   String
+  country      String   @default("India")
+  phone        String
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?   @db.Text
+  image       String?   @db.Text
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([slug])
+}
+
+model Collection {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?   @db.Text
+  image       String?   @db.Text
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([slug])
+}
+
+model Product {
+  id               String         @id @default(cuid())
+  name             String
+  slug             String         @unique
+  description      String         @db.Text
+  categoryId       String
+  category         Category       @relation(fields: [categoryId], references: [id])
+  collectionId     String?
+  collection       Collection?    @relation(fields: [collectionId], references: [id])
+  sku              String         @unique
+  basePrice        Int // Price in INR (e.g. 1499)
+  salePrice        Int? // Optional sale price in INR (e.g. 1199)
+  fabric           String?
+  careInstructions String?        @db.Text
+  isCustomizable   Boolean        @default(false)
+  isPublished      Boolean        @default(true)
+  images           ProductImage[]
+  variants         ProductVariant[]
+  designs          CustomDesign[]
+  wishlistItems    WishlistItem[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([categoryId])
+  @@index([collectionId])
+  @@index([isCustomizable])
+  @@index([isPublished])
+  @@index([slug])
+}
+
+model ProductImage {
+  id           String   @id @default(cuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url          String   @db.Text
+  altText      String?
+  isPrimary    Boolean  @default(false)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([productId])
+}
+
+model ProductVariant {
+  id              String              @id @default(cuid())
+  productId       String
+  product         Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku             String              @unique
+  colorName       String
+  colorHex        String
+  size            String // "XS", "S", "M", "L", "XL", "XXL"
+  fit             String // "Regular Fit", "Slim Fit", "Oversized Fit"
+  stock           Int                 @default(0)
+  priceAdjustment Int                 @default(0)
+  movements       InventoryMovement[]
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([productId])
+  @@index([size])
+  @@index([colorName])
+  @@index([sku])
+}
+
+model InventoryMovement {
+  id          String         @id @default(cuid())
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  changeAmount Int // e.g. -1 or +20
+  reason      String // "SALE", "RESTOCK", "DAMAGE", "CANCELLATION"
+  referenceId String?
+  createdAt   DateTime       @default(now())
+
+  @@index([variantId])
+}
+
+model CustomDesign {
+  id             String      @id @default(cuid())
+  userId         String?
+  user           User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  productId      String
+  product        Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId      String?
+  designName     String      @default("Custom Shirt Design")
+  placement      String      @default("front_chest") // "front_chest" | "center_front" | "back"
+  shirtColorHex  String      @default("#FFFFFF")
+  shirtColorName String      @default("Classic White")
+  textConfig     String?     @db.Text // JSON: { text, font, color, size, align, x, y }
+  logoAssetId    String?
+  logoAsset      DesignAsset? @relation(fields: [logoAssetId], references: [id], onDelete: SetNull)
+  canvasState    String?     @db.MediumText // JSON serialized complete state
+  previewUrl     String?     @db.Text // Durable image URL / data URL for preview
+  version        Int         @default(1)
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([productId])
+}
+
+model DesignAsset {
+  id              String         @id @default(cuid())
+  userId          String?
+  fileUrl         String         @db.Text
+  originalName    String
+  mimeType        String
+  sizeBytes       Int
+  width           Int?
+  height          Int?
+  storageProvider String         @default("local") // "cloudinary" | "local"
+  designs         CustomDesign[]
+  createdAt       DateTime       @default(now())
+
+  @@index([userId])
+}
+
+model Cart {
+  id           String     @id @default(cuid())
+  userId       String?    @unique
+  user         User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionToken String?    @unique
+  items        CartItem[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([userId])
+  @@index([sessionToken])
+}
+
+model CartItem {
+  id               String          @id @default(cuid())
+  cartId           String
+  cart             Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId        String
+  variant          ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  customDesignId   String?
+  customDesign     CustomDesign?   @relation(fields: [customDesignId], references: [id], onDelete: SetNull)
+  quantity         Int             @default(1)
+  unitPrice        Int // Base price snapshot in INR
+  customizationFee Int             @default(0) // Extra customization fee in INR
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([cartId])
+  @@index([variantId])
+  @@index([customDesignId])
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model Coupon {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  discountType  String // "PERCENTAGE" | "FIXED"
+  discountValue Int // percentage (e.g. 10 for 10%) or fixed INR (e.g. 200)
+  minOrderValue Int       @default(0) // min cart total in INR
+  maxDiscount   Int? // max discount cap in INR
+  maxUsage      Int? // null = unlimited
+  usedCount     Int       @default(0)
+  startsAt      DateTime  @default(now())
+  expiresAt     DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  orderNumber     String      @unique
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestEmail      String?
+  status          String      @default("PENDING_PAYMENT") // PENDING_PAYMENT, PAID, PROCESSING, DESIGN_REVIEW, READY_FOR_SHIPMENT, SHIPPED, DELIVERED, CANCELLED, REFUNDED
+  totalAmount     Int // Total INR
+  subtotal        Int // Subtotal INR
+  discountAmount  Int         @default(0)
+  shippingFee     Int         @default(0)
+  taxAmount       Int         @default(0)
+  couponCode      String?
+  shippingAddress String      @db.Text // JSON snapshot
+  trackingNumber  String?
+  courierName     String?
+  notes           String?     @db.Text
+  items           OrderItem[]
+  payments        Payment[]
+  shipments       Shipment[]
+  refunds         Refund[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([status])
+}
+
+model OrderItem {
+  id                   String          @id @default(cuid())
+  orderId              String
+  order                Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId            String
+  variant              ProductVariant  @relation(fields: [variantId], references: [id])
+  customDesignId       String?
+  customDesign         CustomDesign?   @relation(fields: [customDesignId], references: [id], onDelete: SetNull)
+  productName          String
+  variantDetails       String          @db.Text // JSON: size, color, fit, sku
+  customDesignSnapshot String?         @db.MediumText // JSON: full design state snapshot at purchase time
+  quantity             Int
+  unitPrice            Int // INR
+  customizationFee     Int             @default(0) // INR
+  totalPrice           Int // (unitPrice + customizationFee) * quantity
+  createdAt            DateTime        @default(now())
+
+  @@index([orderId])
+  @@index([variantId])
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  orderId           String
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  paymentMethod     String   @default("RAZORPAY")
+  status            String   @default("PENDING") // PENDING, CAPTURED, FAILED, REFUNDED
+  amount            Int // Amount in INR
+  currency          String   @default("INR")
+  razorpayOrderId   String?  @unique
+  razorpayPaymentId String?  @unique
+  razorpaySignature String?
+  rawResponse       String?  @db.Text
+  refunds           Refund[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([razorpayOrderId])
+  @@index([razorpayPaymentId])
+}
+
+model PaymentWebhookEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  eventType   String
+  payload     String   @db.Text
+  processedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([eventId])
+}
+
+model Shipment {
+  id                String    @id @default(cuid())
+  orderId           String
+  order             Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  trackingCode      String
+  carrier           String
+  estimatedDelivery String?
+  shippedAt         DateTime?
+  deliveredAt       DateTime?
+  status            String    @default("PENDING")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([orderId])
+}
+
+model Refund {
+  id               String   @id @default(cuid())
+  orderId          String
+  order            Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  paymentId        String?
+  payment          Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  amount           Int // INR
+  reason           String?
+  status           String   @default("PENDING") // PENDING, PROCESSED, FAILED
+  razorpayRefundId String?  @unique
+  createdAt        DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  details   String?  @db.Text
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+}
