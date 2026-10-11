@@ -155,6 +155,18 @@ export default async function OrderDetailPage({ params }) {
                 }
               }
 
+              let customTextDisplay = null;
+              if (customMeta && customMeta.textConfig) {
+                try {
+                  const tc = typeof customMeta.textConfig === 'string'
+                    ? JSON.parse(customMeta.textConfig)
+                    : customMeta.textConfig;
+                  customTextDisplay = tc && tc.text ? tc.text : null;
+                } catch {
+                  customTextDisplay = null;
+                }
+              }
+
               return (
                 <div key={item.id} className="py-4 flex justify-between items-start text-xs">
                   <div className="space-y-1">
@@ -178,9 +190,9 @@ export default async function OrderDetailPage({ params }) {
                         <p className="text-[11px] text-slate-600">
                           Placement: <span className="uppercase font-semibold">{customMeta.placement?.replace('_', ' ')}</span>
                         </p>
-                        {customMeta.textConfig && (
+                        {customTextDisplay && (
                           <p className="text-[11px] text-slate-600">
-                            Custom Text: <span className="font-serif font-bold text-slate-900">&quot;{typeof customMeta.textConfig === 'string' ? JSON.parse(customMeta.textConfig).text : customMeta.textConfig.text}&quot;</span>
+                            Custom Text: <span className="font-serif font-bold text-slate-900">&quot;{customTextDisplay}&quot;</span>
                           </p>
                         )}
                         {customMeta.previewUrl && (
